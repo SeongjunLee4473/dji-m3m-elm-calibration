@@ -1,76 +1,75 @@
-# DN-to-Reflectance Calibration (DJI Mavic 3M, Empirical Line Method)
+# DJI M3M Empirical Line Calibration
 
-Converts DJI Mavic 3 Multispectral (M3M) DN orthomosaics to surface reflectance using the
-Empirical Line Method (ELM), fitted from a single capture containing four reference tarps
-(10%, 20%, 30%, 40% reflectance).
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative&logoColor=white)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Jupyter](https://img.shields.io/badge/Jupyter-notebook-F37626?logo=jupyter&logoColor=white)](dn_to_reflectance.ipynb)
+![Sensor](https://img.shields.io/badge/Sensor-DJI%20Mavic%203M-000000?logo=dji&logoColor=white)
 
-Compared to Metashape's built-in radiometric calibration (which only supports one reflectance
-target), this notebook fits a per-band linear model from all four known reflectance levels,
-and compares it against a black-level-corrected, origin-forced variant that mirrors
-Metashape's single-panel assumption.
+Converts DJI Mavic 3 Multispectral (M3M) DN orthomosaics to surface reflectance with the Empirical Line Method (ELM). The model is fitted per band from one capture that contains four reference tarps with 10, 20, 30 and 40% reflectance.
 
-## Data availability
+Metashape's built-in radiometric calibration uses a single reflectance target. This notebook fits a linear model per band to all four reflectance levels and compares it with a black-level-corrected model forced through the origin, which follows the single-panel assumption.
 
-**No imagery is included in this repository.** The drone captures used to develop and test
-this notebook belong to the source research institution and are not redistributed here.
-`examples/` contains the result figures (calibration fits, model comparison, validation) from
-an actual run, so you can see what the pipeline produces without needing the raw data. To run
-the notebook yourself, supply your own DJI M3M tarp capture and DN orthomosaic (see below).
+![Calibrated against target reflectance at the four tarps for the Green, Red, RedEdge and NIR bands](examples/elm_validation.png)
 
-| Figure | Shows |
-|---|---|
-| `examples/elm_fit.png` | Free-intercept ELM fit per band (DN vs. known tarp reflectance) |
-| `examples/elm_model_comparison.png` | Free-intercept vs. black-level-corrected model, extrapolated to DN=0 |
-| `examples/elm_validation.png` | Calibrated vs. target reflectance at the tarp locations (RMSE per band) |
+<sub>Calibrated against target reflectance at the tarps, with RMSE for the free-intercept and black-level-corrected models.</sub>
 
 ## Requirements
 
-- Python 3.10+ (developed against a `conda` environment; see `requirements.txt` for pinned
-  package versions)
-- A Jupyter-capable environment with GUI support (the ROI-selection step opens OpenCV
-  windows and requires a display — it will not run headlessly, e.g. over SSH without X
-  forwarding, or in CI)
+- Python 3.10 or later. Pinned package versions are in [`requirements.txt`](requirements.txt).
+- A Jupyter session with a display. The ROI selection step opens OpenCV windows, so it does not run headless (for example over SSH without X forwarding, or in CI).
 
-```powershell
+```bash
 pip install -r requirements.txt
 ```
 
-## Data layout
+## Data
 
-The notebook does not ship any imagery (see above). Point it at your own data either by
-editing the default paths in the notebook's config cell, or by setting environment variables
-before launching Jupyter:
+**No imagery is included.** The drone captures used to develop the notebook belong to the research institution where they were collected and are not redistributed. The [`examples/`](examples/) folder has the figures from an actual run.
 
-| Environment variable | Purpose | Default |
-|---|---|---|
-| `DJI_M3M_TARP_DIR` | Folder containing the 4 single-band tarp TIFFs (`tarp_green.tif`, `tarp_red.tif`, `tarp_rededge.tif`, `tarp_nir.tif`) | `./data/tarps` |
-| `DJI_M3M_MAIN_DN_PATH` | DN orthomosaic to calibrate (band order: Green, Red, RedEdge, NIR) | `./data/sample_dn_orthomosaic.tif` |
-| `DJI_M3M_OUTPUT_DIR` | Where calibrated GeoTIFFs and validation figures are written | `./output/` |
+| Figure | Content |
+|:--|:--|
+| [`elm_fit.png`](examples/elm_fit.png) | Free-intercept ELM fit per band (DN against tarp reflectance) |
+| [`elm_model_comparison.png`](examples/elm_model_comparison.png) | Free-intercept and black-level-corrected models extrapolated to DN = 0 |
+| [`elm_validation.png`](examples/elm_validation.png) | Calibrated against target reflectance at the tarps, with RMSE per band |
 
-`data/` and `output/` are git-ignored — populate them locally, they will never be committed.
+Set the input and output locations with environment variables, or edit the defaults in the notebook's config cell.
+
+| Variable | Content | Default |
+|:--|:--|:--|
+| `DJI_M3M_TARP_DIR` | Folder with the four single-band tarp images (`tarp_green.tif`, `tarp_red.tif`, `tarp_rededge.tif`, `tarp_nir.tif`) | `./data/tarps` |
+| `DJI_M3M_MAIN_DN_PATH` | DN orthomosaic to calibrate, band order Green, Red, RedEdge, NIR | `./data/sample_dn_orthomosaic.tif` |
+| `DJI_M3M_OUTPUT_DIR` | Folder for the calibrated GeoTIFFs and figures | `./output/` |
+
+`data/` and `output/` are ignored by git.
 
 ```powershell
+# Windows PowerShell
 $env:DJI_M3M_TARP_DIR = "D:\data\DJI_M3M\<site>\<date>\<flight>\"
 $env:DJI_M3M_MAIN_DN_PATH = "D:\projects\drone\Metashape\<site>\<ortho>.tif"
 jupyter lab dn_to_reflectance.ipynb
 ```
 
-## Usage
+```bash
+# macOS / Linux
+export DJI_M3M_TARP_DIR="/path/to/tarps"
+export DJI_M3M_MAIN_DN_PATH="/path/to/orthomosaic.tif"
+jupyter lab dn_to_reflectance.ipynb
+```
 
-Run `dn_to_reflectance.ipynb` top to bottom in an interactive Jupyter session:
+## Workflow
 
-1. **Config cell** — verifies that all input files exist.
-2. **Manual ROI selection** — for each of the 4 bands, drag a rough box around the tarp
-   area, then click polygon vertices around each of the 4 tarp panels (10% → 40%). This
-   step is interactive by design (tarps are not axis-aligned, and per-band optical centers
-   differ slightly) and cannot be automated.
-3. **Model fitting** — fits both a free-intercept ELM model and a black-level-corrected
-   model per band, and plots the fit.
-4. **Apply & export** — applies both models to the full DN orthomosaic and writes two
-   calibrated GeoTIFFs.
-5. **Validation** — compares calibrated reflectance at the tarp locations against the known
-   tarp reflectance values (RMSE per band).
+Run [`dn_to_reflectance.ipynb`](dn_to_reflectance.ipynb) from top to bottom in an interactive session.
 
-## Notes
+1. **Config:** checks that all input files exist.
+2. **ROI selection:** for each band, drag a box around the tarps, then click the corners of each tarp from 10% to 40%. This step is manual because the tarps are not axis-aligned and the optical centers differ slightly between bands.
+3. **Model fitting:** fits the free-intercept and black-level-corrected models per band and plots the fits.
+4. **Apply and export:** applies both models to the full orthomosaic and writes two calibrated GeoTIFFs.
+5. **Validation:** compares calibrated reflectance at the tarps with the known values and reports RMSE per band.
 
-- Figures are saved at `dpi=300`; axis tick labels use `labelsize=12`.
+## License
+
+Released under the [MIT License](LICENSE).
+
+## Contact
+
+Seongjun Lee ([@SeongjunLee4473](https://github.com/SeongjunLee4473))
